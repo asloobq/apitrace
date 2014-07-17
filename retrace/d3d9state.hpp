@@ -1,6 +1,6 @@
 /**************************************************************************
  *
- * Copyright 2014 VMware, Inc.
+ * Copyright 2014 VMware, Inc
  * All Rights Reserved.
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -24,38 +24,36 @@
  **************************************************************************/
 
 
-#pragma once
+#ifndef D3D9STATE_HPP
+#define D3D9STATE_HPP
 
 
-#ifdef _WIN32
+#include <ostream>
+
+#include "d3d9imports.hpp"
 
 
-#include <windows.h>
-
-
-/**
- * VersionHelpers.h is not yet widely available (only available on certain MSVC
- * and Windows SDK versions), so just define our own helpers.
- *
- * See http://msdn.microsoft.com/en-gb/library/windows/desktop/ms725491.aspx
- */
-static inline bool
-IsWindows8OrGreater()
-{
-   OSVERSIONINFOEXW osvi;
-   ZeroMemory(&osvi, sizeof osvi);
-   osvi.dwOSVersionInfoSize = sizeof osvi;
-   osvi.dwMajorVersion = 6;
-   osvi.dwMinorVersion = 2;
-   osvi.wServicePackMajor = 0;
-   DWORDLONG dwlConditionMask = 0;
-   VER_SET_CONDITION(dwlConditionMask, VER_MAJORVERSION, VER_GREATER_EQUAL);
-   VER_SET_CONDITION(dwlConditionMask, VER_MINORVERSION, VER_GREATER_EQUAL);
-   VER_SET_CONDITION(dwlConditionMask, VER_SERVICEPACKMAJOR, VER_GREATER_EQUAL);
-   return VerifyVersionInfoW(&osvi,
-                             VER_MAJORVERSION | VER_MINORVERSION | VER_SERVICEPACKMAJOR,
-                             dwlConditionMask);
+namespace image {
+    class Image;
 }
 
+std::ostream &
+operator << (std::ostream &os, D3DFORMAT Format);
 
-#endif /* _WIN32 */
+
+namespace d3dstate {
+
+
+image::Image *
+ConvertImage(D3DFORMAT SrcFormat,
+             void *SrcData,
+             INT SrcPitch,
+             UINT Width, UINT Height);
+
+
+
+} /* namespace d3dstate */
+
+
+
+#endif // D3D9STATE_HPP

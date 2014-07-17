@@ -31,7 +31,7 @@
 #include "image.hpp"
 #include "json.hpp"
 #include "com_ptr.hpp"
-#include "d3d9imports.hpp"
+#include "d3d9state.hpp"
 #include "d3dstate.hpp"
 
 
@@ -42,8 +42,6 @@ static image::Image *
 getSurfaceImage(IDirect3DDevice9 *pDevice,
                 IDirect3DSurface9 *pSurface) {
     image::Image *image = NULL;
-    const unsigned char *src;
-    unsigned char *dst;
     HRESULT hr;
 
     if (!pSurface) {
@@ -54,77 +52,16 @@ getSurfaceImage(IDirect3DDevice9 *pDevice,
     hr = pSurface->GetDesc(&Desc);
     assert(SUCCEEDED(hr));
 
-    unsigned numChannels;
-    image::ChannelType channelType;
-    switch (Desc.Format) {
-    case D3DFMT_X8R8G8B8:
-    case D3DFMT_A8R8G8B8:
-    case D3DFMT_R5G6B5:
-        numChannels = 3;
-        channelType = image::TYPE_UNORM8;
-        break;
-    case D3DFMT_D16:
-    case D3DFMT_D16_LOCKABLE:
-    case D3DFMT_D32F_LOCKABLE:
-        numChannels = 1;
-        channelType = image::TYPE_FLOAT;
-        break;
-    default:
-        std::cerr << "warning: unsupported D3DFORMAT " << Desc.Format << "\n";
-        return NULL;
-    }
-
     D3DLOCKED_RECT LockedRect;
     hr = pSurface->LockRect(&LockedRect, NULL, D3DLOCK_READONLY);
     if (FAILED(hr)) {
         return NULL;
     }
 
-    image = new image::Image(Desc.Width, Desc.Height, numChannels, true, channelType);
-    if (!image) {
-        goto no_image;
-    }
+    image = ConvertImage(Desc.Format, LockedRect.pBits, LockedRect.Pitch, Desc.Width, Desc.Height);
 
-    dst = image->start();
-    src = (const unsigned char *)LockedRect.pBits;
-    for (unsigned y = 0; y < Desc.Height; ++y) {
-        switch (Desc.Format) {
-        case D3DFMT_R5G6B5:
-            for (unsigned x = 0; x < Desc.Width; ++x) {
-                uint32_t pixel = ((const uint16_t *)src)[x];
-                dst[3*x + 0] = (( pixel        & 0x1f) * (2*0xff) + 0x1f) / (2*0x1f);
-                dst[3*x + 1] = (((pixel >>  5) & 0x3f) * (2*0xff) + 0x3f) / (2*0x3f);
-                dst[3*x + 2] = (( pixel >> 11        ) * (2*0xff) + 0x1f) / (2*0x1f);
-            }
-            break;
-        case D3DFMT_X8R8G8B8:
-        case D3DFMT_A8R8G8B8:
-            for (unsigned x = 0; x < Desc.Width; ++x) {
-                dst[3*x + 0] = src[4*x + 2];
-                dst[3*x + 1] = src[4*x + 1];
-                dst[3*x + 2] = src[4*x + 0];
-            }
-            break;
-        case D3DFMT_D16:
-        case D3DFMT_D16_LOCKABLE:
-            for (unsigned x = 0; x < Desc.Width; ++x) {
-                ((float *)dst)[x] = ((const uint16_t *)src)[x] * (1.0f / 0xffff);
-            }
-            break;
-        case D3DFMT_D32F_LOCKABLE:
-            memcpy(dst, src, Desc.Width * sizeof(float));
-            break;
-        default:
-            assert(0);
-            break;
-        }
-
-        src += LockedRect.Pitch;
-        dst += image->stride();
-    }
-
-no_image:
     pSurface->UnlockRect();
+
     return image;
 }
 
@@ -179,7 +116,6 @@ getTextureImage(IDirect3DDevice9 *pDevice,
                 D3DCUBEMAP_FACES FaceType,
                 UINT Level)
 {
-    image::Image *image = NULL;
     HRESULT hr;
 
     if (!pTexture) {
@@ -209,27 +145,19 @@ getTextureImage(IDirect3DDevice9 *pDevice,
     hr = pSurface->GetDesc(&Desc);
     assert(SUCCEEDED(hr));
 
-    if (Desc.Pool == D3DPOOL_DEFAULT) {
-        com_ptr<IDirect3DSurface9> pRenderTarget;
-        hr = pDevice->CreateRenderTarget(Desc.Width, Desc.Height, Desc.Format,
-                                         D3DMULTISAMPLE_NONE, 0, FALSE,
-                                         &pRenderTarget, NULL);
-        if (FAILED(hr)) {
-            std::cerr << "warning: CreateRenderTarget failed\n";
-        } else {
-            hr = pDevice->StretchRect(pSurface, NULL, pRenderTarget, NULL, D3DTEXF_NONE);
-            if (FAILED(hr)) {
-                std::cerr << "warning: StretchRect failed\n";
-            } else {
-                image = getRenderTargetImage(pDevice, pRenderTarget);
-            }
-        }
+    if (Desc.Pool != D3DPOOL_DEFAULT ||
+        Desc.Usage & D3DUSAGE_DYNAMIC) {
+        // Lockable texture
+        return getSurfaceImage(pDevice, pSurface);
+    } else if (Desc.Usage & D3DUSAGE_RENDERTARGET) {
+        // Rendertarget texture
+        return getRenderTargetImage(pDevice, pSurface);
     } else {
-        image = getSurfaceImage(pDevice, pSurface);
+        // D3D constraints are such there is not much else that can be done.
+        return NULL;
     }
-
-    return image;
 }
+
 
 void
 dumpTextures(JSONWriter &json, IDirect3DDevice9 *pDevice)

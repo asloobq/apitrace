@@ -21,6 +21,7 @@
 #include "ui_profilereplaydialog.h"
 #include "vertexdatainterpreter.h"
 #include "trace_profiler.hpp"
+#include "image/image.hpp"
 
 #include <QAction>
 #include <QApplication>
@@ -853,6 +854,8 @@ void MainWindow::initConnections()
 
     connect(m_ui.vertexInterpretButton, SIGNAL(clicked()),
             m_vdataInterpreter, SLOT(interpretData()));
+    connect(m_ui.bufferExportButton, SIGNAL(clicked()),
+            this, SLOT(exportBufferData()));
     connect(m_ui.vertexTypeCB, SIGNAL(currentIndexChanged(const QString&)),
             m_vdataInterpreter, SLOT(setTypeFromString(const QString&)));
     connect(m_ui.vertexStrideSB, SIGNAL(valueChanged(int)),
@@ -1270,7 +1273,20 @@ void MainWindow::saveSelectedSurface()
     }
 
     QVariant var = item->data(0, Qt::UserRole);
+    if (!var.isValid()) {
+        return;
+    }
+
     QImage img = var.value<QImage>();
+    if (img.isNull()) {
+        image::Image *traceImage = ApiSurface::imageFromBase64(var.value<QByteArray>());
+        img = ApiSurface::qimageFromRawImage(traceImage);
+        delete traceImage;
+    }
+    if (img.isNull()) {
+        statusBar()->showMessage( "Failed to save image", 5000);
+        return;
+    }
 
     QString imageIndex;
     if (selectedCall()) {
@@ -1311,8 +1327,54 @@ void MainWindow::saveSelectedSurface()
         .arg(parentIndex)
         .arg(childIndex);
     //qDebug()<<"save "<<fileName;
-    img.save(fileName, "PNG");
-    statusBar()->showMessage( tr("Saved '%1'").arg(fileName), 5000);
+    if (img.save(fileName, "PNG")) {
+        statusBar()->showMessage( tr("Saved '%1'").arg(fileName), 5000);
+    } else {
+        statusBar()->showMessage( tr("Failed to save '%1'").arg(fileName), 5000);
+    }
+}
+
+void MainWindow::exportBufferData()
+{
+    QByteArray data = m_vdataInterpreter->data();
+    if (data.isEmpty())
+        return;
+
+    QString bufferIndex;
+    if (selectedCall()) {
+        bufferIndex = tr("_call_%1").arg(selectedCall()->index());
+    } else if (selectedFrame()) {
+        ApiTraceCall *firstCall =
+            static_cast<ApiTraceCall *>(selectedFrame()->eventAtRow(0));
+        if (firstCall) {
+            bufferIndex = tr("_frame_%1")
+                         .arg(firstCall->index());
+        } else {
+            qDebug()<<"unknown frame number";
+            bufferIndex = tr("_frame_%1")
+                         .arg(firstCall->index());
+        }
+    }
+
+    QString filename =
+        tr("%1%2_buffer.raw")
+        .arg(m_trace->fileName())
+        .arg(bufferIndex);
+
+    QFile file(filename);
+    if (!file.open(QIODevice::WriteOnly)) {
+        statusBar()->showMessage("Failed to save buffer data", 5000);
+        return;
+    }
+
+    if (file.write(data) == -1) {
+        statusBar()->showMessage("Failed to save buffer data", 5000);
+        return;
+    }
+
+    file.close();
+
+    statusBar()->showMessage( tr("Saved buffer to '%1'").arg(filename), 5000);
 }
 
 void MainWindow::loadProgess(int percent)

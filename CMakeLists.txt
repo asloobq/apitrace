@@ -51,6 +51,7 @@ if (NOT WIN32)
 endif ()
 
 set (CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR}/cmake)
+include (ConvenienceLibrary)
 
 if (ANDROID)
     set (ENABLE_GUI false)
@@ -106,7 +107,13 @@ include (CheckIncludeFileCXX)
 
 if (WIN32)
     # http://msdn.microsoft.com/en-us/library/aa383745.aspx
-    add_definitions (-D_WIN32_WINNT=0x0601 -DWINVER=0x0601)
+    if (CMAKE_GENERATOR_TOOLSET MATCHES "_xp$")
+        # Windows XP
+        add_definitions (-D_WIN32_WINNT=0x0501 -DWINVER=0x0501)
+    else ()
+        # Windows 7
+        add_definitions (-D_WIN32_WINNT=0x0601 -DWINVER=0x0601)
+    endif ()
 else (WIN32)
     CHECK_CXX_COMPILER_FLAG("-fvisibility=hidden" CXX_COMPILER_FLAG_VISIBILITY)
     if (CXX_COMPILER_FLAG_VISIBILITY)
@@ -329,7 +336,7 @@ else ()
     set (os os_posix.cpp)
 endif ()
 
-add_library (common STATIC
+add_convenience_library (common
     common/trace_callset.cpp
     common/trace_dump.cpp
     common/trace_fast_callset.cpp
@@ -350,11 +357,6 @@ add_library (common STATIC
     common/${os}
     common/os_backtrace.cpp
     common/highlight.cpp
-)
-
-set_target_properties (common PROPERTIES
-    # Ensure it can be statically linked in shared libraries
-    COMPILE_FLAGS "${CMAKE_SHARED_LIBRARY_CXX_FLAGS}"
 )
 
 target_link_libraries (common

@@ -133,11 +133,28 @@ class D3DRetracer(Retracer):
             print r'    retrace::frameComplete(call);'
             print r'    hDestWindowOverride = NULL;'
 
+        # Ensure textures can be locked when dumping
+        # TODO: Pre-check with CheckDeviceFormat
+        if method.name in ('CreateTexture', 'CreateCubeTexture', 'CreateVolumeTexture'):
+            print r'    if (retrace::dumpingState &&'
+            print r'        Pool == D3DPOOL_DEFAULT &&'
+            print r'        !(Usage & (D3DUSAGE_RENDERTARGET|D3DUSAGE_DEPTHSTENCIL))) {'
+            print r'        Usage |= D3DUSAGE_DYNAMIC;'
+            print r'    }'
+
         if 'pSharedHandle' in method.argNames():
             print r'    if (pSharedHandle) {'
             print r'        retrace::warning(call) << "shared surfaces unsupported\n";'
             print r'        pSharedHandle = NULL;'
             print r'    }'
+
+        if method.name in ('Lock', 'LockRect', 'LockBox'):
+            # Reset _DONOTWAIT flags. Otherwise they may fail, and we have no
+            # way to cope with it (other than retry).
+            mapFlagsArg = method.getArgByName('Flags')
+            for flag in mapFlagsArg.type.values:
+                if flag.endswith('_DONOTWAIT'):
+                    print r'    Flags &= ~%s;' % flag
 
         Retracer.invokeInterfaceMethod(self, interface, method)
 

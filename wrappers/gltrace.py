@@ -531,7 +531,7 @@ class GlTracer(Tracer):
                     # Emit a fake function
                     print '        {'
                     print '            static const trace::FunctionSig &_sig = %s ? _glEnableClientState_sig : _glDisableClientState_sig;' % flag_name
-                    print '            unsigned _call = trace::localWriter.beginEnter(&_sig);'
+                    print '            unsigned _call = trace::localWriter.beginEnter(&_sig, true);'
                     print '            trace::localWriter.beginArg(0);'
                     self.serializeValue(glapi.GLenum, enable_name)
                     print '            trace::localWriter.endArg();'
@@ -635,7 +635,7 @@ class GlTracer(Tracer):
             print '                flush = flush && flushing_unmap;'
             print '            }'
             print '            if (flush && length > 0) {'
-            self.emit_memcpy('map', 'map', 'length')
+            self.emit_memcpy('map', 'length')
             print '            }'
             print '        }'
             print '    }'
@@ -648,7 +648,7 @@ class GlTracer(Tracer):
             print '        GLint size = 0;'
             print '        _glGetBufferParameteriv(target, GL_BUFFER_SIZE, &size);'
             print '        if (map && size > 0) {'
-            self.emit_memcpy('map', 'map', 'size')
+            self.emit_memcpy('map', 'size')
             self.shadowBufferMethod('bufferSubData(0, size, map)')
             print '        }'
             print '    }'
@@ -661,26 +661,26 @@ class GlTracer(Tracer):
             print '        GLint length = 0;'
             print '        _glGetNamedBufferParameterivEXT(buffer, GL_BUFFER_MAP_LENGTH, &length);'
             print '        if (map && length > 0) {'
-            self.emit_memcpy('map', 'map', 'length')
+            self.emit_memcpy('map', 'length')
             print '        }'
             print '    }'
         if function.name == 'glFlushMappedBufferRange':
             print '    GLvoid *map = NULL;'
             print '    _glGetBufferPointerv(target, GL_BUFFER_MAP_POINTER, &map);'
             print '    if (map && length > 0) {'
-            self.emit_memcpy('(char *)map + offset', '(const char *)map + offset', 'length')
+            self.emit_memcpy('(const char *)map + offset', 'length')
             print '    }'
         if function.name == 'glFlushMappedBufferRangeAPPLE':
             print '    GLvoid *map = NULL;'
             print '    _glGetBufferPointerv(target, GL_BUFFER_MAP_POINTER, &map);'
             print '    if (map && size > 0) {'
-            self.emit_memcpy('(char *)map + offset', '(const char *)map + offset', 'size')
+            self.emit_memcpy('(const char *)map + offset', 'size')
             print '    }'
         if function.name == 'glFlushMappedNamedBufferRangeEXT':
             print '    GLvoid *map = NULL;'
             print '    _glGetNamedBufferPointervEXT(buffer, GL_BUFFER_MAP_POINTER, &map);'
             print '    if (map && length > 0) {'
-            self.emit_memcpy('(char *)map + offset', '(const char *)map + offset', 'length')
+            self.emit_memcpy('(const char *)map + offset', 'length')
             print '    }'
 
         # FIXME: We don't support coherent/pinned memory mappings
@@ -1028,7 +1028,7 @@ class GlTracer(Tracer):
 
             # Emit a fake function
             self.array_trace_intermezzo(api, uppercase_name)
-            print '            unsigned _call = trace::localWriter.beginEnter(&_%s_sig);' % (function.name,)
+            print '            unsigned _call = trace::localWriter.beginEnter(&_%s_sig, true);' % (function.name,)
             for arg in function.args:
                 assert not arg.output
                 print '            trace::localWriter.beginArg(%u);' % (arg.index,)
@@ -1105,7 +1105,7 @@ class GlTracer(Tracer):
             print '                    size_t _size = _%s_size(%s, count);' % (function.name, arg_names)
 
             # Emit a fake function
-            print '                    unsigned _call = trace::localWriter.beginEnter(&_%s_sig);' % (function.name,)
+            print '                    unsigned _call = trace::localWriter.beginEnter(&_%s_sig, true);' % (function.name,)
             for arg in function.args:
                 assert not arg.output
                 print '                    trace::localWriter.beginArg(%u);' % (arg.index,)
@@ -1187,7 +1187,7 @@ class GlTracer(Tracer):
     def emitFakeTexture2D(self):
         function = glapi.glapi.getFunctionByName('glTexImage2D')
         instances = function.argNames()
-        print '        unsigned _fake_call = trace::localWriter.beginEnter(&_%s_sig);' % (function.name,)
+        print '        unsigned _fake_call = trace::localWriter.beginEnter(&_%s_sig, true);' % (function.name,)
         for arg in function.args:
             assert not arg.output
             self.serializeArg(function, arg)

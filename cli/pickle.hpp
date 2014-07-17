@@ -162,6 +162,23 @@ public:
         os.put(TUPLE);
     }
 
+    inline void beginTuple(unsigned length) {
+        if (length >= 4) {
+            os.put(MARK);
+        }
+    }
+
+    inline void endTuple(unsigned length) {
+        static const Opcode ops[4] = {
+            EMPTY_TUPLE,
+            TUPLE1,
+            TUPLE2,
+            TUPLE3,
+        };
+        Opcode op = length < 4 ? ops[length] : TUPLE;
+        os.put(op);
+    }
+
     inline void writeString(const char *s, size_t length) {
         if (!s) {
             writeNone();
@@ -275,6 +292,16 @@ public:
         os.put(BINPUT);
         os.put(1);
         writeString(static_cast<const char *>(buf), length);
+        os.put(TUPLE1);
+        os.put(REDUCE);
+    }
+
+    inline void writePointer(unsigned long long addr) {
+        os.put(GLOBAL);
+        os << "unpickle\nPointer\n";
+        os.put(BINPUT);
+        os.put(1);
+        writeInt(addr);
         os.put(TUPLE1);
         os.put(REDUCE);
     }

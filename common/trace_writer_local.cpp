@@ -230,5 +230,26 @@ void LocalWriter::flush(void) {
 LocalWriter localWriter;
 
 
+void fakeMemcpy(const void *ptr, size_t size) {
+    assert(ptr);
+    if (!size) {
+        return;
+    }
+    unsigned _call = localWriter.beginEnter(&memcpy_sig, true);
+    localWriter.beginArg(0);
+    localWriter.writePointer((uintptr_t)ptr);
+    localWriter.endArg();
+    localWriter.beginArg(1);
+    localWriter.writeBlob(ptr, size);
+    localWriter.endArg();
+    localWriter.beginArg(2);
+    localWriter.writeUInt(size);
+    localWriter.endArg();
+    localWriter.endEnter();
+    localWriter.beginLeave(_call);
+    localWriter.endLeave();
+}
+
+
 } /* namespace trace */
 
